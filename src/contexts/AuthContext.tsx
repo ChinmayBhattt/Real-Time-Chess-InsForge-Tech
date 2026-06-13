@@ -41,6 +41,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error || !data?.user) {
         setUser(null)
       } else {
+        const token = (insforge as any).tokenManager?.getAccessToken()
+        if (token) {
+          insforge.setAccessToken(token)
+        }
         setUser({
           id: data.user.id,
           email: data.user.email,
@@ -69,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (data?.accessToken && data?.user) {
+      insforge.setAccessToken(data.accessToken)
       setUser({
         id: data.user.id,
         email: data.user.email,
@@ -84,6 +89,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyEmail = useCallback(async (email: string, otp: string) => {
     const { data, error } = await insforge.auth.verifyEmail({ email, otp })
     if (error) return { error: error.message }
+
+    if (data?.accessToken) {
+      insforge.setAccessToken(data.accessToken)
+    }
 
     if (data?.user) {
       setUser({
@@ -101,6 +110,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) {
       if (error.statusCode === 403) return { error: 'Email not verified. Please check your inbox.' }
       return { error: error.message }
+    }
+
+    if (data?.accessToken) {
+      insforge.setAccessToken(data.accessToken)
     }
 
     if (data?.user) {
@@ -122,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await insforge.auth.signOut()
+    insforge.setAccessToken(null)
     setUser(null)
   }, [])
 

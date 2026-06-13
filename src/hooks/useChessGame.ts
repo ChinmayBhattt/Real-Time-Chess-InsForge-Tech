@@ -39,14 +39,15 @@ interface UseChessGameOptions {
 export function useChessGame({ roomId, hostId, guestId, initialFen }: UseChessGameOptions) {
   const { user } = useAuth()
   const chessRef = useRef(new Chess(initialFen))
+
+  // Determine player color: host = white, guest = black
+  const playerColor: PieceColor = user?.id === hostId ? 'w' : 'b'
+
   const [gameState, setGameState] = useState<GameState>(buildGameState(chessRef.current, null, null))
   const [connected, setConnected] = useState(false)
   const [opponentOnline, setOpponentOnline] = useState(false)
   const subscribedRef = useRef(false)
   const moveCountRef = useRef(0)
-
-  // Determine player color: host = white, guest = black
-  const playerColor: PieceColor = user?.id === hostId ? 'w' : 'b'
 
   function buildGameState(
     chess: Chess,
@@ -133,42 +134,45 @@ export function useChessGame({ roomId, hostId, guestId, initialFen }: UseChessGa
 
         // Listen for moves
         const userId = user!.id
-        insforge.realtime.on('chess_move', (payload: { from: string; to: string; san: string; fen: string; moveNumber: number; meta: { senderId: string; channel: string } }) => {
+        insforge.realtime.on('chess_move', (payload: any) => {
           if (cleanedUp) return
           if (payload.meta.channel !== channel) return
           if (payload.meta.senderId === userId) return
 
+          const data = payload.payload || payload
           // Apply opponent's move
           const chess = chessRef.current
-          const result = chess.move({ from: payload.from, to: payload.to, promotion: 'q' })
+          const result = chess.move({ from: data.from, to: data.to, promotion: 'q' })
           if (result) {
-            moveCountRef.current = payload.moveNumber
-            setGameState(buildGameState(chess, null, { from: payload.from, to: payload.to }))
+            moveCountRef.current = data.moveNumber
+            setGameState(buildGameState(chess, null, { from: data.from, to: data.to }))
           }
         })
 
-        insforge.realtime.on('game_resign', (payload: { userId: string; meta: { channel: string } }) => {
+        insforge.realtime.on('game_resign', (payload: any) => {
           if (cleanedUp) return
           if (payload.meta.channel !== channel) return
+          const data = payload.payload || payload
           setGameState((prev) => ({
             ...prev,
             isGameOver: true,
-            gameResult: payload.userId === userId
+            gameResult: data.userId === userId
               ? `${playerColor === 'w' ? 'Black' : 'White'} wins by resignation`
               : `${playerColor === 'w' ? 'White' : 'Black'} wins by resignation`,
           }))
         })
 
-        insforge.realtime.on('game_draw_offer', (payload: { userId: string; meta: { channel: string } }) => {
+        insforge.realtime.on('game_draw_offer', (payload: any) => {
           if (cleanedUp) return
           if (payload.meta.channel !== channel) return
-          if (payload.userId !== userId) {
+          const data = payload.payload || payload
+          if (data.userId !== userId) {
             // Show draw offer to this player
             setGameState((prev) => ({ ...prev, gameResult: 'draw_offered' }))
           }
         })
 
-        insforge.realtime.on('game_draw_accepted', (payload: { meta: { channel: string } }) => {
+        insforge.realtime.on('game_draw_accepted', (payload: any) => {
           if (cleanedUp) return
           if (payload.meta.channel !== channel) return
           setGameState((prev) => ({
